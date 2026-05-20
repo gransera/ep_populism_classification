@@ -1,6 +1,6 @@
 # Large files — Drive only
 data/
-model/
+models/
 checkpoints/
 outputs/
 cache/
@@ -9,6 +9,7 @@ cache/
 *.pt
 *.bin
 *.safetensors
+*.pth
 *.h5
 
 # Python noise
