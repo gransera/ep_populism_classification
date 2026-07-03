@@ -33,6 +33,7 @@ from statsmodels.iolib.summary2 import summary_col
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from linearmodels.panel import PanelOLS
 from linearmodels.panel.results import compare
+import matplotlib.pyplot as plt
 
 # ---------------------------------------------------------------------------
 # DATA STRUCTURE NOTE
@@ -179,6 +180,25 @@ def check_vif(df, ivs=IVS):
 # pop_seat_share_group and pop_seat_share_ep are the most likely pair to
 # flag here since a group's seat share partly drives the EP-wide figure.
 
+# ---------------------------------------------------------------------------
+# 1b. SAVE A REGRESSION TABLE AS A PNG
+# ---------------------------------------------------------------------------
+ 
+def save_table_as_png(table, filepath, fontsize=9, dpi=200):
+    text = str(table)
+    lines = text.split("\n")
+    char_width = max(len(line) for line in lines)
+    fig_width = max(6, char_width * fontsize * 0.011)
+    fig_height = max(2, len(lines) * fontsize * 0.022)
+ 
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    ax.axis("off")
+    ax.text(0, 1, text, family="monospace", fontsize=fontsize,
+            va="top", ha="left", transform=ax.transAxes)
+    fig.tight_layout()
+    fig.savefig(filepath, dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved: {filepath}")
 
 # ---------------------------------------------------------------------------
 # 2. UNIVARIATE -> FULL MODEL PROGRESSION, for one dimension
@@ -337,7 +357,7 @@ if __name__ == "__main__":
 
     # --- 1. Aggregate sentence-level data to party x year x dimension ---
     df = aggregate_to_party_year(df_sentences, min_sentences=10)
-    df.to_csv("../ouputs/party_year_aggregated.csv", index=False)  # save intermediate
+    df.to_csv("../outputs/party_year_aggregated.csv", index=False)  # save intermediate
 
     # --- 2. Collinearity check on full IV set (run on ONE dimension's rows) ---
     print(check_vif(df[df["dimension"] == "populism"]))
@@ -348,18 +368,22 @@ if __name__ == "__main__":
         models, table = run_model_progression(sub)
         print(f"\n=== {dim.upper()}: pooled, all parties ===")
         print(table)
+        save_table_as_png(table, f"../outputs/{dim}_table.png")
 
     # --- 4. Per-party models (full model only), per dimension ---
-    # for dim in DIMENSIONS:
-    #     sub = df[df["dimension"] == dim]
-    #     results, table = run_per_group(sub)
-    #     print(f"\n=== {dim.upper()}: by party ===")
-    #     print(table)
+    for dim in DIMENSIONS:
+        sub = df[df["dimension"] == dim]
+        results, table = run_per_group(sub)
+        print(f"\n=== {dim.upper()}: by party ===")
+        print(table)
+        save_table_as_png(table, f"../outputs/{dim}_by_party_table.png")
+
 
     # --- 5a. Three dimensions side by side ---
-    # models, table = run_all_dimensions(df)
-    # print("\n=== Full model, all three dimensions compared ===")
-    # print(table)
+    models, table = run_all_dimensions(df)
+    print("\n=== Full model, all three dimensions compared ===")
+    print(table)
+    save_table_as_png(table, "../outputs/all_dimensions_comparison_table.png")
 
     # --- 5b. SUR (needs wide-format: one row per party-year, 3 DV columns) ---
     # df_wide = df.pivot_table(index=["party_group", "year"] + IVS,
