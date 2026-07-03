@@ -22,7 +22,8 @@ The functions in section 1 below aggregate this up to party x year
 (the actual regression unit) BEFORE anything in section 2 onward runs.
 
 """
-!pip install pandas statsmodels linearmodels
+# conda activate ma_ep_populism
+# pip install pandas statsmodels linearmodels
 
 import pandas as pd
 import numpy as np
