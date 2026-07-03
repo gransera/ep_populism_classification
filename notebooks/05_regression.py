@@ -69,14 +69,16 @@ def aggregate_to_party_year(df_sentences,
                              year_col="legislative_year",
                              dim_binary_cols=None,
                              min_sentences=None):
+    
+    if dim_binary_cols is None:
+        dim_binary_cols = {
+            "anti_elitism": "anti_elitism_binary",
+            "people_centrism": "people_centrism_binary",
+            "populism": "populism_combined",
+        }
+
     """
     Collapses sentence-level data to one row per (party, year, dimension).
-
-    dim_binary_cols : dict mapping output dimension name -> sentence-level
-        binary column, defaults to your actual columns:
-            {"anti_elitism":    "anti_elitism_binary",
-             "people_centrism": "people_centrism_binary",
-             "populism":        "populism_combined"}
 
     Produces rhetoric_pct = 100 * mean(binary flag) within each party-year,
     plus n_sentences (needed for weighting -- see run_model_progression's
@@ -85,17 +87,12 @@ def aggregate_to_party_year(df_sentences,
     min_sentences : optionally drop party-years with fewer than this many
         sentences (very thin party-years give unstable percentages).
     """
-    if dim_binary_cols is None:
-        dim_binary_cols = {
-            "anti_elitism": "anti_elitism_binary",
-            "people_centrism": "people_centrism_binary",
-            "populism": "populism_combined",
-        }
 
-    # --- sanity check: seat-share columns should be constant within a
-    # given party-year (same value for every sentence from that party in
-    # that year). Flag if not -- would indicate a data issue or that these
-    # vary at a finer grain than expected (e.g. by speech date within year).
+    # --- sanity check: 
+            # seat-share columns should be constant within a
+            # given party-year (same value for every sentence from that party in
+            # that year). Flag if not -- would indicate a data issue or that these
+            # vary at a finer grain than expected (e.g. by speech date within year).
     seat_cols = ["populist_ep_share", "populist_share_of_group"]
     n_unique = (
         df_sentences.groupby([party_col, year_col])[seat_cols]
@@ -107,6 +104,7 @@ def aggregate_to_party_year(df_sentences,
               f"non-constant seat-share values. Inspect before proceeding:")
         print(inconsistent)
 
+    # Conversion to long format
     long_frames = []
     for dim_name, col in dim_binary_cols.items():
         grp = df_sentences.groupby([party_col, year_col]).agg(
@@ -134,51 +132,22 @@ def aggregate_to_party_year(df_sentences,
     return df_long.rename(columns={year_col: "year", party_col: "party_group"})
 
 
-def check_populism_combined_construction(df_sentences,
-                                          anti="anti_elitism_binary",
-                                          people="people_centrism_binary",
-                                          combined="populism_combined"):
-    """
-    Diagnostic: is populism_combined mechanically derived from the other
-    two flags (e.g. AND / OR), or independently coded? This matters for
-    how you interpret "three comparable dimensions" -- if populism is a
-    logical combination of the other two, its regression results will be
-    mechanically related to theirs, not an independent third measure.
-    Run this once and eyeball the crosstabs.
-    """
-    df = df_sentences
-    and_match = ((df[anti] & df[people]) == df[combined]).mean()
-    or_match = ((df[anti] | df[people]) == df[combined]).mean()
-    print(f"Share matching AND(anti_elitism, people_centrism): {and_match:.3f}")
-    print(f"Share matching OR(anti_elitism, people_centrism):  {or_match:.3f}")
-    print("\nCrosstab (anti_elitism x people_centrism -> populism_combined mean):")
-    print(df.groupby([anti, people])[combined].mean())
-
-
-# IVS uses your actual seat-share column names (post-aggregation).
-# crisis_year deliberately omitted for now -- add it to this list once
-# you've defined it, and make sure aggregate_to_party_year() creates the
-# corresponding column too.
 IVS = ["election_year", "crisis_year", "populist_share_of_group", "populist_ep_share"]
 DIMENSIONS = ["anti_elitism", "people_centrism", "populism"]
 
 
 # ---------------------------------------------------------------------------
-# 1. QUICK DIAGNOSTICS: multicollinearity check on the full model
+# 1. QUICK DIAGNOSTICS: multicollinearity check on the full model 
+#       (VIF > 5 signals problematic collinearity)
 # ---------------------------------------------------------------------------
 
 def check_vif(df, ivs=IVS):
-    """Run this once on the full IV set before trusting the 'all together' model."""
     X = sm.add_constant(df[ivs].dropna())
     vif = pd.DataFrame({
         "variable": X.columns,
         "VIF": [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
     })
     return vif[vif["variable"] != "const"]
-
-# Rule of thumb: VIF > 5 (some say >10) signals problematic collinearity.
-# pop_seat_share_group and pop_seat_share_ep are the most likely pair to
-# flag here since a group's seat share partly drives the EP-wide figure.
 
 # ---------------------------------------------------------------------------
 # 1b. SAVE A REGRESSION TABLE AS A PNG
@@ -201,6 +170,77 @@ def save_table_as_png(table, filepath, fontsize=9, dpi=200):
     print(f"Saved: {filepath}")
 
 # ---------------------------------------------------------------------------
+# 1c. EXTRACT TIDY RESULTS (for plotting in a separate script)
+# ---------------------------------------------------------------------------
+
+def tidy_panelols(model, dimension, model_type="pooled_full", party=None):
+    ci = model.conf_int()
+    rows = []
+    for term in model.params.index:
+        rows.append({
+            "dimension": dimension,
+            "model_type": model_type,
+            "party": party,          # None for pooled models
+            "term": term,
+            "coefficient": model.params[term],
+            "std_error": model.std_errors[term],
+            "ci_low": ci.loc[term, "lower"],
+            "ci_high": ci.loc[term, "upper"],
+            "p_value": model.pvalues[term],
+            "n_obs": int(model.nobs),
+            "r_squared": model.rsquared,
+        })
+    return rows
+
+def tidy_ols(model, dimension, model_type="by_party", party=None):
+    ci = model.conf_int()
+    rows = []
+    for term in model.params.index:
+        rows.append({
+            "dimension": dimension,
+            "model_type": model_type,
+            "party": party,
+            "term": term,
+            "coefficient": model.params[term],
+            "std_error": model.bse[term],
+            "ci_low": ci.loc[term, 0],
+            "ci_high": ci.loc[term, 1],
+            "p_value": model.pvalues[term],
+            "n_obs": int(model.nobs),
+            "r_squared": model.rsquared,
+        })
+    return rows
+
+def tidy_mixedlm(mdf, dimension, model_type="mixed_effects"):
+    rows = []
+    ci = mdf.conf_int()
+    for term in mdf.fe_params.index:
+        rows.append({
+            "dimension": dimension, "model_type": model_type, "party": None,
+            "term": term, "coefficient": mdf.fe_params[term],
+            "std_error": mdf.bse_fe[term],
+            "ci_low": ci.loc[term, 0], "ci_high": ci.loc[term, 1],
+            "p_value": mdf.pvalues[term], "n_obs": int(mdf.nobs),
+            "r_squared": np.nan,
+        })
+    for party, effects in mdf.random_effects.items():
+        for term, val in effects.items():
+            rows.append({
+                "dimension": dimension, "model_type": model_type + "_random_effect",
+                "party": party, "term": term, "coefficient": val,
+                "std_error": np.nan, "ci_low": np.nan, "ci_high": np.nan,
+                "p_value": np.nan, "n_obs": int(mdf.nobs), "r_squared": np.nan,
+            })
+    return rows
+
+def save_tidy_results(all_rows, filepath="../outputs/regression_results_tidy.csv"):
+    tidy_df = pd.DataFrame(all_rows)
+    tidy_df.to_csv(filepath, index=False)
+    print(f"Saved tidy results: {filepath} ({len(tidy_df)} rows)")
+    return tidy_df
+ 
+
+# ---------------------------------------------------------------------------
 # 2. UNIVARIATE -> FULL MODEL PROGRESSION, for one dimension
 # ---------------------------------------------------------------------------
 #
@@ -210,12 +250,9 @@ def save_table_as_png(table, filepath, fontsize=9, dpi=200):
 #   - Driscoll-Kraay ("kernel") covariance -> robust to serial correlation
 #     within party AND correlation across parties in the same year
 #
-# NOTE: entity_effects=True, but deliberately NO time_effects=True, since
-# election_year / crisis_year vary only over time and would be wiped out
-# by year fixed effects.
+# NOTE: NO time_effects=True --> election_year / crisis_year vary only over time and would be wiped out by year fixed effects.
 
 def _prep_panel(df, entity_col="party_group", time_col="year"):
-    """Set the (entity, time) MultiIndex PanelOLS expects."""
     return df.set_index([entity_col, time_col])
 
 def run_model_progression(df, dv="rhetoric_pct", ivs=IVS,
@@ -287,6 +324,53 @@ def run_per_group(df, dv="rhetoric_pct", ivs=IVS, group_col="party_group",
     )
     return results, table
 
+# ---------------------------------------------------------------------------
+# 3b. MIXED-EFFECTS MODEL (random intercept + random slopes by party)
+# ---------------------------------------------------------------------------
+#
+# this fits ONE model where each party's slope is allowed to deviate from
+# a shared population-level slope, with "partial pooling": parties with
+# little/noisy data get shrunk toward the overall estimate instead of
+# producing wild, unstable coefficients.
+#
+# Trade-off: you get one population-average effect + a sense of
+# between-party variance, rather than 11 individually reportable
+# per-party coefficient tables. 
+ 
+def run_mixed_effects(df, dv="rhetoric_pct", ivs=IVS,
+                       group_col="party_group", random_slopes=None):
+    """
+    Fits a mixed-effects (hierarchical) model:
+        rhetoric_pct ~ election_year + populist_share_of_group + populist_ep_share
+        + (random intercept by party) + (random slopes, if specified)
+    """
+    if random_slopes is None:
+        random_slopes = ivs
+ 
+    formula = f"{dv} ~ " + " + ".join(ivs)
+    re_formula = "~ " + " + ".join(random_slopes) if random_slopes else None
+ 
+    md = smf.mixedlm(formula, data=df, groups=df[group_col],
+                      re_formula=re_formula)
+    try:
+        mdf = md.fit()
+    except Exception as e:
+        print(f"Full random-slopes model failed to converge ({e}). "
+              f"Falling back to random-intercept-only.")
+        md = smf.mixedlm(formula, data=df, groups=df[group_col])
+        mdf = md.fit()
+ 
+    print(mdf.summary())
+ 
+    # Per-party random effects (deviations from the population-average
+    # intercept/slopes) -- this is the closest analogue to the per-party
+    # coefficients in run_per_group(), but shrunk toward the mean for
+    # parties with little data.
+    re_df = pd.DataFrame(mdf.random_effects).T
+    print("\nPer-party random effects (deviation from population average):")
+    print(re_df)
+ 
+    return mdf, re_df
 
 # ---------------------------------------------------------------------------
 # 4a. THREE DIMENSIONS SIDE BY SIDE (Option A - recommended main output)
@@ -352,34 +436,46 @@ if __name__ == "__main__":
 
     df_sentences = pd.read_csv('../data/ep_speeches_populist_party_data.csv')
 
-    # --- 0. Diagnose how populism_combined relates to the other two flags ---
-    check_populism_combined_construction(df_sentences)
-
     # --- 1. Aggregate sentence-level data to party x year x dimension ---
     df = aggregate_to_party_year(df_sentences, min_sentences=10)
     df.to_csv("../outputs/party_year_aggregated.csv", index=False)  # save intermediate
 
-    # --- 2. Collinearity check on full IV set (run on ONE dimension's rows) ---
+    # --- 1b. Collinearity check on full IV set (run on ONE dimension's rows) ---
     print(check_vif(df[df["dimension"] == "populism"]))
 
-    # --- 3. Univariate -> full progression, per dimension ---
+    # Collect csv for later visualisation
+    tidy_rows = []
+
+    # --- 2. Univariate -> full progression, per dimension ---
     for dim in DIMENSIONS:
         sub = df[df["dimension"] == dim]
         models, table = run_model_progression(sub)
         print(f"\n=== {dim.upper()}: pooled, all parties ===")
         print(table)
         save_table_as_png(table, f"../outputs/{dim}_table.png")
+        tidy_rows += tidy_panelols(models["full"], dimension=dim, model_type="pooled_full")
 
-    # --- 4. Per-party models (full model only), per dimension ---
+    # --- 3. Per-party models (full model only), per dimension ---
     for dim in DIMENSIONS:
         sub = df[df["dimension"] == dim]
         results, table = run_per_group(sub)
         print(f"\n=== {dim.upper()}: by party ===")
         print(table)
         save_table_as_png(table, f"../outputs/{dim}_by_party_table.png")
+        for party, m in results.items():
+            tidy_rows += tidy_ols(m, dimension=dim, model_type="by_party", party=party)
 
+    # --- 3b. Mixed-effects alternative to per-party models ---
+    for dim in DIMENSIONS:
+        sub = df[df["dimension"] == dim]
+        print(f"\n=== {dim.upper()}: mixed-effects (random intercept + slopes by party) ===")
+        mdf, re_df = run_mixed_effects(sub)
+        print(mdf)
+        print(re_df)
+        save_table_as_png(re_df, f"../outputs/{dim}_mixed_effects_random_effects.png")  
+        tidy_rows += tidy_mixedlm(mdf, dimension=dim)
 
-    # --- 5a. Three dimensions side by side ---
+    # --- 4a. Three dimensions side by side ---
     models, table = run_all_dimensions(df)
     print("\n=== Full model, all three dimensions compared ===")
     print(table)
