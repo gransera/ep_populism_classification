@@ -57,7 +57,7 @@ import matplotlib.pyplot as plt
 #       and used by default below.
 
 EP_ELECTION_YEARS = [1999, 2004, 2009, 2014, 2019, 2024]
-EP_CRISIS_YEARS = [2004, 2009, 2010, 2015, 2016, 2020, 2021, 2022, 2023] # Eastern enlargement round, Euro area crisis, Refugee crisis, Covid-19, Energy crisis (Russian war)
+EP_CRISIS_YEARS = [2004, 2009, 2015, 2020, 2022] # Eastern enlargement round, Euro area crisis, Refugee crisis, Covid-19, Energy crisis (Russian war)
 
 
 # ---------------------------------------------------------------------------
@@ -325,55 +325,7 @@ def run_per_group(df, dv="rhetoric_pct", ivs=IVS, group_col="party_group",
     return results, table
 
 # ---------------------------------------------------------------------------
-# 3b. MIXED-EFFECTS MODEL (random intercept + random slopes by party)
-# ---------------------------------------------------------------------------
-#
-# this fits ONE model where each party's slope is allowed to deviate from
-# a shared population-level slope, with "partial pooling": parties with
-# little/noisy data get shrunk toward the overall estimate instead of
-# producing wild, unstable coefficients.
-#
-# Trade-off: you get one population-average effect + a sense of
-# between-party variance, rather than 11 individually reportable
-# per-party coefficient tables. 
- 
-def run_mixed_effects(df, dv="rhetoric_pct", ivs=IVS,
-                       group_col="party_group", random_slopes=None):
-    """
-    Fits a mixed-effects (hierarchical) model:
-        rhetoric_pct ~ election_year + populist_share_of_group + populist_ep_share
-        + (random intercept by party) + (random slopes, if specified)
-    """
-    if random_slopes is None:
-        random_slopes = ivs
- 
-    formula = f"{dv} ~ " + " + ".join(ivs)
-    re_formula = "~ " + " + ".join(random_slopes) if random_slopes else None
- 
-    md = smf.mixedlm(formula, data=df, groups=df[group_col],
-                      re_formula=re_formula)
-    try:
-        mdf = md.fit()
-    except Exception as e:
-        print(f"Full random-slopes model failed to converge ({e}). "
-              f"Falling back to random-intercept-only.")
-        md = smf.mixedlm(formula, data=df, groups=df[group_col])
-        mdf = md.fit()
- 
-    print(mdf.summary())
- 
-    # Per-party random effects (deviations from the population-average
-    # intercept/slopes) -- this is the closest analogue to the per-party
-    # coefficients in run_per_group(), but shrunk toward the mean for
-    # parties with little data.
-    re_df = pd.DataFrame(mdf.random_effects).T
-    print("\nPer-party random effects (deviation from population average):")
-    print(re_df)
- 
-    return mdf, re_df
-
-# ---------------------------------------------------------------------------
-# 4a. THREE DIMENSIONS SIDE BY SIDE (Option A - recommended main output)
+# 4. THREE DIMENSIONS SIDE BY SIDE
 # ---------------------------------------------------------------------------
 
 def run_all_dimensions(df_long, ivs=IVS, entity_col="party_group",
@@ -400,35 +352,6 @@ def run_all_dimensions(df_long, ivs=IVS, entity_col="party_group",
 
 
 # ---------------------------------------------------------------------------
-# 4b. SEEMINGLY UNRELATED REGRESSION across the three dimensions (Option B)
-# ---------------------------------------------------------------------------
-
-def run_sur(df_wide, ivs=IVS, dv_cols=None):
-    """
-    Joint estimation of the three dimension-equations, exploiting
-    correlation between their residuals. Requires WIDE data: one row per
-    party_group x year, with the three DV columns.
-
-    dv_cols : dict, e.g. {"anti_elitism": "anti_elitism_pct",
-                           "people_centrism": "people_centrism_pct",
-                           "populism": "populism_pct"}
-    """
-    from linearmodels.system import SUR
-
-    if dv_cols is None:
-        dv_cols = {d: f"{d}_pct" for d in DIMENSIONS}
-
-    equations = {}
-    for dim, col in dv_cols.items():
-        exog = sm.add_constant(df_wide[ivs])
-        equations[dim] = {"dependent": df_wide[col], "exog": exog}
-
-    sur_model = SUR(equations)
-    sur_res = sur_model.fit(cov_type="robust")
-    return sur_res
-
-
-# ---------------------------------------------------------------------------
 # EXAMPLE WORKFLOW
 # ---------------------------------------------------------------------------
 
@@ -439,6 +362,8 @@ if __name__ == "__main__":
     # --- 1. Aggregate sentence-level data to party x year x dimension ---
     df = aggregate_to_party_year(df_sentences, min_sentences=10)
     df.to_csv("../outputs/party_year_aggregated.csv", index=False)  # save intermediate
+
+    #df = pd.read_csv("../outputs/party_year_aggregated.csv") 
 
     # --- 1b. Collinearity check on full IV set (run on ONE dimension's rows) ---
     print(check_vif(df[df["dimension"] == "populism"]))
@@ -452,8 +377,8 @@ if __name__ == "__main__":
         models, table = run_model_progression(sub)
         print(f"\n=== {dim.upper()}: pooled, all parties ===")
         print(table)
-        save_table_as_png(table, f"../outputs/{dim}_table.png")
-        tidy_rows += tidy_panelols(models["full"], dimension=dim, model_type="pooled_full")
+        #save_table_as_png(table, f"../outputs/{dim}_table.png")
+        #tidy_rows += tidy_panelols(models["full"], dimension=dim, model_type="pooled_full")
 
     # --- 3. Per-party models (full model only), per dimension ---
     for dim in DIMENSIONS:
@@ -465,25 +390,10 @@ if __name__ == "__main__":
         for party, m in results.items():
             tidy_rows += tidy_ols(m, dimension=dim, model_type="by_party", party=party)
 
-    # --- 3b. Mixed-effects alternative to per-party models ---
-    for dim in DIMENSIONS:
-        sub = df[df["dimension"] == dim]
-        print(f"\n=== {dim.upper()}: mixed-effects (random intercept + slopes by party) ===")
-        mdf, re_df = run_mixed_effects(sub)
-        print(mdf)
-        print(re_df)
-        save_table_as_png(re_df, f"../outputs/{dim}_mixed_effects_random_effects.png")  
-        tidy_rows += tidy_mixedlm(mdf, dimension=dim)
 
-    # --- 4a. Three dimensions side by side ---
+    # --- 4. Three dimensions side by side ---
     models, table = run_all_dimensions(df)
     print("\n=== Full model, all three dimensions compared ===")
     print(table)
     save_table_as_png(table, "../outputs/all_dimensions_comparison_table.png")
 
-    # --- 5b. SUR (needs wide-format: one row per party-year, 3 DV columns) ---
-    # df_wide = df.pivot_table(index=["party_group", "year"] + IVS,
-    #                           columns="dimension", values="rhetoric_pct").reset_index()
-    # df_wide.columns.name = None
-    # sur_res = run_sur(df_wide, dv_cols={d: d for d in DIMENSIONS})
-    # print(sur_res)
