@@ -56,8 +56,8 @@ import matplotlib.pyplot as plt
 #       will absorb them completely. Party (entity) fixed effects are fine
 #       and used by default below.
 
-EP_ELECTION_YEARS = [1999, 2004, 2009, 2014, 2019, 2024]
-EP_CRISIS_YEARS = [2004, 2009, 2015, 2020, 2022] # Eastern enlargement round, Euro area crisis, Refugee crisis, Covid-19, Energy crisis (Russian war)
+EP_ELECTION_YEARS = [2004, 2009, 2014, 2019, 2024]
+EP_CRISIS_YEARS = [2009, 2015, 2022] # Euro area crisis, Refugee crisis, Energy crisis (Russian war)
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +352,7 @@ def run_all_dimensions(df_long, ivs=IVS, entity_col="party_group",
 
 
 # ---------------------------------------------------------------------------
-# EXAMPLE WORKFLOW
+# WORKFLOW
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -361,7 +361,7 @@ if __name__ == "__main__":
 
     # --- 1. Aggregate sentence-level data to party x year x dimension ---
     df = aggregate_to_party_year(df_sentences, min_sentences=10)
-    df.to_csv("../outputs/party_year_aggregated.csv", index=False)  # save intermediate
+    #df.to_csv("../outputs/party_year_aggregated.csv", index=False)  # save intermediate
 
     #df = pd.read_csv("../outputs/party_year_aggregated.csv") 
 
@@ -378,7 +378,7 @@ if __name__ == "__main__":
         print(f"\n=== {dim.upper()}: pooled, all parties ===")
         print(table)
         #save_table_as_png(table, f"../outputs/{dim}_table.png")
-        #tidy_rows += tidy_panelols(models["full"], dimension=dim, model_type="pooled_full")
+        tidy_rows += tidy_panelols(models["full"], dimension=dim, model_type="pooled_full")
 
     # --- 3. Per-party models (full model only), per dimension ---
     for dim in DIMENSIONS:
@@ -386,7 +386,7 @@ if __name__ == "__main__":
         results, table = run_per_group(sub)
         print(f"\n=== {dim.upper()}: by party ===")
         print(table)
-        save_table_as_png(table, f"../outputs/{dim}_by_party_table.png")
+        #save_table_as_png(table, f"../outputs/{dim}_by_party_table.png")
         for party, m in results.items():
             tidy_rows += tidy_ols(m, dimension=dim, model_type="by_party", party=party)
 
@@ -395,5 +395,5 @@ if __name__ == "__main__":
     models, table = run_all_dimensions(df)
     print("\n=== Full model, all three dimensions compared ===")
     print(table)
-    save_table_as_png(table, "../outputs/all_dimensions_comparison_table.png")
+    #save_table_as_png(table, "../outputs/all_dimensions_comparison_table.png")
 
