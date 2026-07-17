@@ -233,7 +233,7 @@ def tidy_mixedlm(mdf, dimension, model_type="mixed_effects"):
             })
     return rows
 
-def save_tidy_results(all_rows, filepath="../outputs/regression_results_tidy.csv"):
+def save_tidy_results(all_rows, filepath="../outputs/regression/regression_results_tidy.csv"):
     tidy_df = pd.DataFrame(all_rows)
     tidy_df.to_csv(filepath, index=False)
     print(f"Saved tidy results: {filepath} ({len(tidy_df)} rows)")
@@ -355,15 +355,18 @@ def run_all_dimensions(df_long, ivs=IVS, entity_col="party_group",
 # WORKFLOW
 # ---------------------------------------------------------------------------
 
+import os
+os.makedirs("../outputs/regression", exist_ok=True)
+
 if __name__ == "__main__":
 
     df_sentences = pd.read_csv('../data/ep_speeches_populist_party_data.csv')
 
     # --- 1. Aggregate sentence-level data to party x year x dimension ---
     df = aggregate_to_party_year(df_sentences, min_sentences=10)
-    #df.to_csv("../outputs/party_year_aggregated.csv", index=False)  # save intermediate
+    df.to_csv("../outputs/regression/party_year_aggregated.csv", index=False)  # save intermediate
 
-    #df = pd.read_csv("../outputs/party_year_aggregated.csv") 
+    df = pd.read_csv("../outputs/regression/party_year_aggregated.csv")
 
     # --- 1b. Collinearity check on full IV set (run on ONE dimension's rows) ---
     print(check_vif(df[df["dimension"] == "populism"]))
@@ -377,7 +380,7 @@ if __name__ == "__main__":
         models, table = run_model_progression(sub)
         print(f"\n=== {dim.upper()}: pooled, all parties ===")
         print(table)
-        #save_table_as_png(table, f"../outputs/{dim}_table.png")
+        save_table_as_png(table, f"../outputs/regression/{dim}_table.png")
         tidy_rows += tidy_panelols(models["full"], dimension=dim, model_type="pooled_full")
 
     # --- 3. Per-party models (full model only), per dimension ---
@@ -386,7 +389,7 @@ if __name__ == "__main__":
         results, table = run_per_group(sub)
         print(f"\n=== {dim.upper()}: by party ===")
         print(table)
-        #save_table_as_png(table, f"../outputs/{dim}_by_party_table.png")
+        save_table_as_png(table, f"../outputs/regression/{dim}_by_party_table.png")
         for party, m in results.items():
             tidy_rows += tidy_ols(m, dimension=dim, model_type="by_party", party=party)
 
@@ -395,5 +398,6 @@ if __name__ == "__main__":
     models, table = run_all_dimensions(df)
     print("\n=== Full model, all three dimensions compared ===")
     print(table)
-    #save_table_as_png(table, "../outputs/all_dimensions_comparison_table.png")
+    save_table_as_png(table, "../outputs/regression/all_dimensions_comparison_table.png")
 
+    save_tidy_results(tidy_rows)
