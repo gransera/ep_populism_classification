@@ -77,22 +77,8 @@ def aggregate_to_party_year(df_sentences,
             "populism": "populism_combined",
         }
 
-    """
-    Collapses sentence-level data to one row per (party, year, dimension).
-
-    Produces rhetoric_pct = 100 * mean(binary flag) within each party-year,
-    plus n_sentences (needed for weighting -- see run_model_progression's
-    `weight_col` argument) and the seat-share IVs, election_year.
-
-    min_sentences : optionally drop party-years with fewer than this many
-        sentences (very thin party-years give unstable percentages).
-    """
 
     # --- sanity check: 
-            # seat-share columns should be constant within a
-            # given party-year (same value for every sentence from that party in
-            # that year). Flag if not -- would indicate a data issue or that these
-            # vary at a finer grain than expected (e.g. by speech date within year).
     seat_cols = ["populist_ep_share", "populist_share_of_group"]
     n_unique = (
         df_sentences.groupby([party_col, year_col])[seat_cols]
@@ -249,8 +235,6 @@ def save_tidy_results(all_rows, filepath="../outputs/regression/regression_resul
 #     differences in baseline rhetoric
 #   - Driscoll-Kraay ("kernel") covariance -> robust to serial correlation
 #     within party AND correlation across parties in the same year
-#
-# NOTE: NO time_effects=True --> election_year / crisis_year vary only over time and would be wiped out by year fixed effects.
 
 def _prep_panel(df, entity_col="party_group", time_col="year"):
     return df.set_index([entity_col, time_col])
@@ -258,18 +242,7 @@ def _prep_panel(df, entity_col="party_group", time_col="year"):
 def run_model_progression(df, dv="rhetoric_pct", ivs=IVS,
                            entity_col="party_group", time_col="year",
                            entity_effects=True, weight_col="n_sentences"):
-    """
-    Runs: DV ~ IV1, DV ~ IV2, ..., DV ~ IV1+IV2+IV3+IV4
-    Party fixed effects + Driscoll-Kraay SEs (bandwidth default ~ T^(1/4)).
-    Returns a dict of fitted models plus a linearmodels comparison table.
-
-    weight_col : if set (default "n_sentences", produced by
-        aggregate_to_party_year), runs WEIGHTED least squares using
-        sentence count as weight. This matters because rhetoric_pct is a
-        proportion -- a party-year built from 400 sentences is a much
-        more precise estimate than one built from 8, and unweighted OLS
-        treats them as equally informative. Set to None to disable.
-    """
+ 
     panel = _prep_panel(df, entity_col, time_col)
     weights = panel[weight_col] if weight_col else None
     models = {}
@@ -295,13 +268,7 @@ def run_model_progression(df, dv="rhetoric_pct", ivs=IVS,
 
 def run_per_group(df, dv="rhetoric_pct", ivs=IVS, group_col="party_group",
                    time_col="year", maxlags=None):
-    """
-    Full model (all IVs together) run separately within each party group.
-    Each party group here is a genuine 26-year time series (1999-2024), so
-    autocorrelation is a real concern -> HAC (Newey-West) SEs, not plain
-    OLS or simple HC robust SEs. Default maxlags follows the common
-    rule-of-thumb floor(4*(T/100)^(2/9)); override if you have a reason to.
-    """
+
     results = {}
     formula_full = f"{dv} ~ " + " + ".join(ivs)
 
@@ -332,11 +299,7 @@ def run_all_dimensions(df_long, ivs=IVS, entity_col="party_group",
                         time_col="year", dim_col="dimension",
                         dv="rhetoric_pct", dimensions=DIMENSIONS,
                         entity_effects=True):
-    """
-    Runs the same full panel model (party FE + Driscoll-Kraay SEs)
-    separately for each dimension and puts them in one comparison table
-    (columns = anti_elitism / people_centrism / populism).
-    """
+
     models = {}
     for dim in dimensions:
         sub = df_long[df_long[dim_col] == dim]
