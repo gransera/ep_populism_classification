@@ -127,13 +127,7 @@ def plot_per_party_coefficients(tidy):
 # ---------------------------------------------------------------------------
 # 3a. R² BAR CHART — POOLED MODEL ONLY (valid cross-dimension comparison)
 # ---------------------------------------------------------------------------
-#
-# Deliberately NOT shown alongside per-party R² -- pooled R² is R²-within
-# (variance left after removing each party's own average level via entity
-# fixed effects), while per-party R² is unconditional/total R² for a
-# single time series with no such baseline removed. They answer different
-# questions and are not comparable on the same axis; showing them side by
-# side (even using the median) previously implied a false comparison.
+
 
 def plot_r2_pooled(tidy):
     pooled = (tidy[tidy['model_type'] == 'pooled_full']
@@ -160,13 +154,7 @@ def plot_r2_pooled(tidy):
 # ---------------------------------------------------------------------------
 # 3b. R² SPREAD ACROSS PARTIES — for the heterogeneity/robustness section
 # ---------------------------------------------------------------------------
-#
-# Shows how much per-party R² varies across the 11 parties, per dimension
-# -- a legitimate heterogeneity statistic on its own. Deliberately kept
-# separate from the pooled chart above (see note in figure caption) and
-# individual party R² values are overlaid as points so small-N parties
-# (which can show inflated R² from overfitting) are visible rather than
-# hidden inside a summary statistic.
+
 
 def plot_r2_per_party_spread(tidy):
     by_party = (tidy[tidy['model_type'] == 'by_party']
@@ -332,17 +320,17 @@ def plot_seat_shares_combined(tidy):
 # RUN ALL
 # ---------------------------------------------------------------------------
 
-#plot_coefficient_forest(tidy, IVS_BINARY, 
-#                        'Pooled Panel Model: Binary Variables', 
-#                        'viz_coefficient_forest_binary.png')
+plot_coefficient_forest(tidy, IVS_BINARY, 
+                        'Pooled Panel Model: Binary Variables', 
+                        'viz_coefficient_forest_binary.png')
 
-#plot_coefficient_forest(tidy, IVS_SHARES,
-#                        'Pooled Panel Model: Seat Share Variables',
-#                        'viz_coefficient_forest_shares.png')
+plot_coefficient_forest(tidy, IVS_SHARES,
+                        'Pooled Panel Model: Seat Share Variables',
+                        'viz_coefficient_forest_shares.png')
 
-#plot_per_party_coefficients(tidy)
-#plot_r2_pooled(tidy)
-#plot_r2_per_party_spread(tidy)
-#plot_significance_heatmap(tidy)
+plot_per_party_coefficients(tidy)
+plot_r2_pooled(tidy)
+plot_r2_per_party_spread(tidy)
+plot_significance_heatmap(tidy)
 plot_seat_shares_by_group(tidy)
 plot_seat_shares_combined(tidy)
