@@ -57,7 +57,7 @@ import matplotlib.pyplot as plt
 #       and used by default below.
 
 EP_ELECTION_YEARS = [2004, 2009, 2014, 2019, 2024]
-EP_CRISIS_YEARS = [2009, 2015, 2022] # Euro area crisis, Refugee crisis, Energy crisis (Russian war)
+EP_CRISIS_YEARS = [2009, 2015] # Euro area crisis, Refugee crisis, Energy crisis (Russian war)
 
 
 # ---------------------------------------------------------------------------
