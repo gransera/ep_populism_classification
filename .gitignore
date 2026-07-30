@@ -22,3 +22,11 @@ wandb/
 
 # Mac noise
 .DS_Store
+
+# Notebooks which are not part of the final analysis
+notebooks/01_training_elite_BERTbase.ipynb
+notebooks/01_training_elite_berteuroparl.ipynb
+notebooks/01_training_elite_debertaV3base.ipynb
+notebooks/01_training_elite_RoBERTabase.ipynb
+notebooks/01_training_people_BERTbase.ipynb
+notebooks/01_training_populism_BERTbase.ipynb
