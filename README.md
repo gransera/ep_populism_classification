@@ -13,6 +13,7 @@ This project develops and applies a transformer-based classification pipeline to
 
 ## Repository Structure
 
+'''
 ├── data/ # Not included (see Data Sources below)
 ├── notebooks/ # Jupyter notebooks for classification, analysis, and visualisation
 ├── outputs/
@@ -22,6 +23,7 @@ This project develops and applies a transformer-based classification pipeline to
 │ ├── tables/ # Party-period tables per dimension & dictionary-transformer comparison
 │ └── metrics/ # Metrics of transformer-based approach
 └── README.md
+'''
 
 ---
 
