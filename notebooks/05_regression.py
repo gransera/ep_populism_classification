@@ -57,7 +57,7 @@ import matplotlib.pyplot as plt
 #       and used by default below.
 
 EP_ELECTION_YEARS = [2004, 2009, 2014, 2019, 2024]
-EP_CRISIS_YEARS = [2009, 2015] # Euro area crisis, Refugee crisis, Energy crisis (Russian war)
+EP_CRISIS_YEARS = [2009, 2015, 2022] # Euro area crisis, Refugee crisis, Energy crisis (Russian war)
 
 
 # ---------------------------------------------------------------------------
@@ -291,28 +291,6 @@ def run_per_group(df, dv="rhetoric_pct", ivs=IVS, group_col="party_group",
     )
     return results, table
 
-# ---------------------------------------------------------------------------
-# 4. THREE DIMENSIONS SIDE BY SIDE
-# ---------------------------------------------------------------------------
-
-def run_all_dimensions(df_long, ivs=IVS, entity_col="party_group",
-                        time_col="year", dim_col="dimension",
-                        dv="rhetoric_pct", dimensions=DIMENSIONS,
-                        entity_effects=True):
-
-    models = {}
-    for dim in dimensions:
-        sub = df_long[df_long[dim_col] == dim]
-        panel = _prep_panel(sub, entity_col, time_col)
-        exog = sm.add_constant(panel[ivs])
-        m = PanelOLS(panel[dv], exog, entity_effects=entity_effects).fit(
-            cov_type="kernel"
-        )
-        models[dim] = m
-
-    table = compare(models, stars=True)
-    return models, table
-
 
 # ---------------------------------------------------------------------------
 # WORKFLOW
@@ -356,11 +334,5 @@ if __name__ == "__main__":
         for party, m in results.items():
             tidy_rows += tidy_ols(m, dimension=dim, model_type="by_party", party=party)
 
-
-    # --- 4. Three dimensions side by side ---
-    models, table = run_all_dimensions(df)
-    print("\n=== Full model, all three dimensions compared ===")
-    print(table)
-    save_table_as_png(table, "../outputs/regression/all_dimensions_comparison_table.png")
 
     save_tidy_results(tidy_rows)
